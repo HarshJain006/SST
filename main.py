@@ -169,14 +169,28 @@ def load_english_hindi(model_size="tiny"):
 def load_hindi_only():
     if not st.session_state.hindi_only_loaded:
         try:
-            st.session_state.hindi_only_transcriber = pipeline(
-                "automatic-speech-recognition",
-                model="AI4Bharat/indicwav2vec-hindi",
-                device="cuda" if torch.cuda.is_available() else "cpu"
-            )
-            st.session_state.hindi_only_loaded = True
-            return "Speech2Text (Hindi Only) loaded successfully"
+            with st.spinner("Loading Hindi-only Speech2Text model..."):
+                # Try loading AI4Bharat model first
+                try:
+                    st.session_state.hindi_only_transcriber = pipeline(
+                        "automatic-speech-recognition",
+                        model="AI4Bharat/indicwav2vec-hindi",
+                        device="cuda" if torch.cuda.is_available() else "cpu"
+                    )
+                    logger.info("Loaded AI4Bharat/indicwav2vec-hindi successfully")
+                except Exception as e:
+                    logger.warning(f"Failed to load AI4Bharat/indicwav2vec-hindi: {str(e)}. Falling back to facebook/mms-1b-all.")
+                    # Fallback to facebook/mms-1b-all with Hindi language
+                    st.session_state.hindi_only_transcriber = pipeline(
+                        "automatic-speech-recognition",
+                        model="facebook/mms-1b-all",
+                        device="cuda" if torch.cuda.is_available() else "cpu"
+                    )
+                    logger.info("Loaded facebook/mms-1b-all as fallback")
+                st.session_state.hindi_only_loaded = True
+                return "Speech2Text (Hindi Only) loaded successfully"
         except Exception as e:
+            logger.error(f"Error loading Hindi-only model: {str(e)}")
             return f"Error loading Speech2Text (Hindi Only): {str(e)}"
     return "Speech2Text (Hindi Only) already loaded"
 
@@ -288,9 +302,16 @@ def transcribe_hindi_only(audio):
     try:
         start_time = time.time()
         with st.spinner("Transcribing..."):
-            result = st.session_state.hindi_only_transcriber(
-                {"sampling_rate": sr, "raw": y}
-            )
+            # Check if using MMS model
+            if st.session_state.hindi_only_transcriber.model.name_or_path == "facebook/mms-1b-all":
+                result = st.session_state.hindi_only_transcriber(
+                    {"sampling_rate": sr, "raw": y},
+                    generate_kwargs={"language": "hin", "task": "transcribe"}
+                )
+            else:
+                result = st.session_state.hindi_only_transcriber(
+                    {"sampling_rate": sr, "raw": y}
+                )
             raw_text = result.get("text", "").strip()
             segments = re.split(r'[।,.!?]\s*', raw_text)
             transcription = "\n".join([segment.strip() for segment in segments if segment.strip()])
