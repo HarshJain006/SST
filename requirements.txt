@@ -7,7 +7,7 @@ numpy==1.26.4
 soundfile==0.12.1
 audio-recorder-streamlit==0.0.10
 
-
+sounddevice==0.4.6
 transformers==4.46.0
 
 torch==2.5.0
